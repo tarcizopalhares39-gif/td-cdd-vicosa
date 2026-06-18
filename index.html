@@ -363,7 +363,6 @@
   // ==========================================
 
   const PDF_FILENAME  = 'Tabela de ruas e distritos 22-09.pdf';
-  // MELHORIA 4: Modelo mais rápido (Flash 2.0 = latência menor para buscas simples)
   const GEMINI_MODEL  = 'gemini-2.5-flash';
   let   API_KEY       = localStorage.getItem('gemini_api_key');
 
@@ -376,8 +375,6 @@ Nomes parecidos e sobrenome parecidos, então me liste os distritos o que achou.
 Mesmo quando eu disser o sobrenome, ou somente o primeiro nome da rua de forma abreviada, então liste os nomes e os Distritos que você achou na tabela.
 Por favor responda em Português (Brasil) e de forma rápida e direta. Não use markdown complexo, apenas **negrito** para destacar informações.`;
 
-  // MELHORIA 1: Cache do contexto completo, montado uma única vez após o PDF carregar.
-  // Assim cada consulta não precisa reconstruir o prompt base.
   let cachedContext = "";
 
   const statusDiv   = document.getElementById('status');
@@ -479,8 +476,6 @@ Por favor responda em Português (Brasil) e de forma rápida e direta. Não use 
         fullText += pageText + "\n";
       }
 
-      // MELHORIA 1: Monta o contexto completo uma única vez e armazena em cache.
-      // Cada busca só vai acrescentar a pergunta do usuário no final.
       cachedContext = `${systemPrompt}\n\nAqui está o conteúdo extraído do PDF da tabela de ruas:\n${fullText}\n\nPergunta do usuário: `;
 
       statusDiv.innerText = "🟢 Sistema pronto! Base de rotas carregada.";
@@ -497,8 +492,6 @@ Por favor responda em Português (Brasil) e de forma rápida e direta. Não use 
 
   // ==========================================
   // INTEGRAÇÃO COM A API DO GEMINI (STREAMING)
-  // MELHORIA 2: Usa streamGenerateContent para exibir texto progressivamente.
-  // O usuário vê a primeira palavra em ~1s, sem esperar a resposta completa.
   // ==========================================
   async function processQuery(query) {
     if (!API_KEY) {
@@ -511,11 +504,13 @@ Por favor responda em Português (Brasil) e de forma rápida e direta. Não use 
       return;
     }
 
+    // Tira o foco do input antes de iniciar para fechar o teclado no mobile
+    textInput.blur();
+
     sendBtn.disabled = true;
     micBtn.disabled  = true;
     statusDiv.innerText = "🟡 Buscando distrito...";
 
-    // Cria o card imediatamente com cursor piscando (feedback visual instantâneo)
     const newCard = document.createElement('div');
     newCard.className = 'card';
     newCard.innerHTML = `<h3>🔍 Busca: ${query}</h3><p class="streaming" id="streamTarget"><span class="cursor-blink"></span></p>`;
@@ -525,7 +520,6 @@ Por favor responda em Português (Brasil) e de forma rápida e direta. Não use 
     const streamTarget = newCard.querySelector('#streamTarget');
     let accumulatedText = "";
 
-    // MELHORIA 4: Usa o endpoint de streaming do Gemini 2.0 Flash
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${API_KEY}`;
 
     try {
@@ -553,7 +547,7 @@ Por favor responda em Português (Brasil) e de forma rápida e direta. Não use 
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // guarda linha incompleta para próxima iteração
+        buffer = lines.pop();
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
@@ -565,7 +559,6 @@ Por favor responda em Português (Brasil) e de forma rápida e direta. Não use 
             const piece = chunk?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
             if (piece) {
               accumulatedText += piece;
-              // Renderiza com formatação em tempo real
               let formatted = accumulatedText
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\n/g, '<br>');
@@ -577,7 +570,6 @@ Por favor responda em Português (Brasil) e de forma rápida e direta. Não use 
         }
       }
 
-      // Finaliza: remove cursor e congela o texto
       let finalFormatted = accumulatedText
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\n/g, '<br>');
@@ -585,7 +577,6 @@ Por favor responda em Português (Brasil) e de forma rápida e direta. Não use 
 
       statusDiv.innerText = "🟢 Triagem concluída.";
       textInput.value = '';
-      textInput.focus();
 
     } catch (error) {
       streamTarget.innerHTML = `<span style="color:#ff4d4d">❌ Erro: ${error.message}</span>`;
